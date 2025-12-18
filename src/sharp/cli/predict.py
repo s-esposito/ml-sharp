@@ -87,10 +87,12 @@ def predict_cli(
     extensions = io.get_supported_image_extensions()
 
     image_paths = []
+    is_directory_input = False
     if input_path.is_file():
         if input_path.suffix in extensions:
             image_paths = [input_path]
     else:
+        is_directory_input = True
         for ext in extensions:
             image_paths.extend(list(input_path.glob(f"**/*{ext}")))
 
@@ -126,7 +128,13 @@ def predict_cli(
     gaussian_predictor.eval()
     gaussian_predictor.to(device)
 
-    output_path.mkdir(exist_ok=True, parents=True)
+    # If input is a directory, create a subfolder with the input folder's name
+    if is_directory_input:
+        actual_output_path = output_path / input_path.name
+    else:
+        actual_output_path = output_path
+    
+    actual_output_path.mkdir(exist_ok=True, parents=True)
 
     for image_path in image_paths:
         LOGGER.info("Processing %s", image_path)
@@ -144,11 +152,11 @@ def predict_cli(
         )
         gaussians = predict_image(gaussian_predictor, image, f_px, torch.device(device))
 
-        LOGGER.info("Saving 3DGS to %s", output_path)
-        save_ply(gaussians, f_px, (height, width), output_path / f"{image_path.stem}.ply")
+        LOGGER.info("Saving 3DGS to %s", actual_output_path)
+        save_ply(gaussians, f_px, (height, width), actual_output_path / f"{image_path.stem}.ply")
 
         if with_rendering:
-            output_video_path = (output_path / image_path.stem).with_suffix(".mp4")
+            output_video_path = (actual_output_path / image_path.stem).with_suffix(".mp4")
             LOGGER.info("Rendering trajectory to %s", output_video_path)
 
             metadata = SceneMetaData(intrinsics[0, 0].item(), (width, height), "linearRGB")
